@@ -48,7 +48,7 @@ def get_enabled_coins(node_ip, user_pass):
     r = requests.post(node_ip, json=params)
     return r
 
-def check_active_coins(node_ip, user_pass, cointag_list):
+def check_active_coins(node_ip, user_pass):
     active_cointags = []
     active_coins = get_enabled_coins(node_ip, user_pass).json()['result']
     for coin in active_coins:
@@ -72,7 +72,7 @@ def check_coins_status(node_ip, user_pass):
         for coin in coinslib.coins:
             cointag_list.append(coin)
         num_all_coins = len(cointag_list)
-        active_coins = check_active_coins(node_ip, user_pass, cointag_list)
+        active_coins = check_active_coins(node_ip, user_pass)
         num_active_coins = len(active_coins)
         msg = str(num_active_coins)+"/"+str(num_all_coins)+" coins active"
         if num_active_coins == 0:
@@ -189,6 +189,7 @@ def cancel_pair(node_ip, user_pass, base, rel):
     r = requests.post(node_ip,json=params)
     return r
 
+# sell base, buy rel.
 def setprice(node_ip, user_pass, base, rel, basevolume, relprice, trademax=False, cancel_previous=True):
     params = {'userpass': user_pass,
               'method': 'setprice',
@@ -299,24 +300,30 @@ def build_coins_data(node_ip, user_pass, cointag_list=''):
                   coins_data[coin]['USD_price'] = 0
       print(tuilib.colorize('Getting prices from mm2 orderbook...', 'cyan'))
       for coin in coins_data:
-          if coins_data[coin]['BTC_price'] == 0:
-              mm2_kmd_price = get_kmd_mm2_price(node_ip, user_pass, coin)
-              coins_data[coin]['KMD_price'] = mm2_kmd_price[1]
+          try:
+              if coin == 'RICK' or coin == 'MORTY':
+                  coins_data[coin]['BTC_price'] = 0
+                  coins_data[coin]['AUD_price'] = 0
+                  coins_data[coin]['USD_price'] = 0
+                  coins_data[coin]['KMD_price'] = 0
+                  coins_data[coin]['price_source'] = 'mm2_orderbook'
+              elif coins_data[coin]['BTC_price'] == 0:
+                  mm2_kmd_price = get_kmd_mm2_price(node_ip, user_pass, coin)
+                  coins_data[coin]['KMD_price'] = mm2_kmd_price[1]
+                  coins_data[coin]['price_source'] = 'mm2_orderbook'
+                  coins_data[coin]['BTC_price'] = mm2_kmd_price[1]*coins_data['KMD']['BTC_price']
+                  coins_data[coin]['AUD_price'] = mm2_kmd_price[1]*coins_data['KMD']['AUD_price']
+                  coins_data[coin]['USD_price'] = mm2_kmd_price[1]*coins_data['KMD']['USD_price']
+          except Exception as e:
+              print("Error getting KMD price: "+str(e))
+              coins_data[coin]['KMD_price'] = 0
               coins_data[coin]['price_source'] = 'mm2_orderbook'
-              coins_data[coin]['BTC_price'] = mm2_kmd_price[1]*coins_data['KMD']['BTC_price']
-              coins_data[coin]['AUD_price'] = mm2_kmd_price[1]*coins_data['KMD']['AUD_price']
-              coins_data[coin]['USD_price'] = mm2_kmd_price[1]*coins_data['KMD']['USD_price']
-      for coin in coins_data:
-          if coin == 'RICK' or coin == 'MORTY':
               coins_data[coin]['BTC_price'] = 0
               coins_data[coin]['AUD_price'] = 0
               coins_data[coin]['USD_price'] = 0
-              coins_data[coin]['KMD_price'] = 0
-              coins_data[coin]['price_source'] = 'mm2_orderbook'
-      return coins_data
   except Exception as e:
-    #print(e)
-    pass
+    print("Error getting coins_data: "+str(e))
+  return coins_data
 
 def gecko_fiat_prices(gecko_ids, fiat):
     url = 'https://api.coingecko.com/api/v3/simple/price'
@@ -331,15 +338,19 @@ def get_kmd_mm2_price(node_ip, user_pass, coin):
     total_kmd_value = 0
     max_kmd_value = 0
     kmd_volume = 0
-    num_asks = len(kmd_orders['asks'])
-    for asks in kmd_orders['asks']:
-        kmd_value = float(asks['maxvolume']) * float(asks['price'])
-        if kmd_value < min_kmd_value:
-            min_kmd_value = kmd_value
-        elif kmd_value > max_kmd_value:
-            max_kmd_value = kmd_value
-        total_kmd_value += kmd_value
-        kmd_volume += float(asks['maxvolume'])
+    num_asks = 0
+    if 'asks' in kmd_orders:
+      num_asks = len(kmd_orders['asks'])
+      for asks in kmd_orders['asks']:
+          kmd_value = float(asks['maxvolume']) * float(asks['price'])
+          if kmd_value < min_kmd_value:
+              min_kmd_value = kmd_value
+          elif kmd_value > max_kmd_value:
+              max_kmd_value = kmd_value
+          total_kmd_value += kmd_value
+          kmd_volume += float(asks['maxvolume'])
+    else:
+      print(kmd_orders)
     if num_asks > 0:
         median_kmd_value = total_kmd_value/kmd_volume
     else:

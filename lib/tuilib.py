@@ -545,7 +545,7 @@ def show_balances_table(node_ip, user_pass, coins_data='', bot=False):
         coin_status = rpclib.check_coins_status(node_ip, user_pass)
         active_coins = coin_status[3]
         if coins_data == '':
-            coins_data = rpclib.build_coins_data(node_ip, user_pass, coinslib.coins)
+            coins_data = rpclib.build_coins_data(node_ip, user_pass, list(coinslib.coins.keys()))
         if len(active_coins) == 0:
             msg = colorize("No coins activated!", 'red')
             if not bot:
@@ -1043,7 +1043,7 @@ def show_failed_swaps(node_ip, user_pass, swapcount=50):
 def run_tradebot(node_ip, user_pass, refresh_mins=20):
     while True:
         try:
-            coins_data = rpclib.build_coins_data(node_ip, user_pass, coinslib.coins)
+            coins_data = rpclib.build_coins_data(node_ip, user_pass, list(coinslib.coins.keys()))
             submit_bot_trades(node_ip, user_pass, coins_data)
             show_orders_table(node_ip, user_pass, coins_data, True)
             show_balances_table(node_ip, user_pass, coins_data, True)
@@ -1229,8 +1229,10 @@ def submit_bot_trades(node_ip, user_pass, coins_data):
                                         print(colorize("Setprice order: "+str(trade_vol)[:8]+" "+base+" for "+str(trade_price*trade_vol)[:8]+" "+rel+" submitted...","red"))
                                         time.sleep(0.1)
                                 else:
-
-                                    trade_price = pair_price*coinslib.coins[base]['premium']
+                                    if 'premium' in coinslib.coins[base]:
+                                        trade_price = pair_price*coinslib.coins[base]['premium']
+                                    else:
+                                        trade_price = pair_price*1.05
                                     resp = rpclib.setprice(node_ip, user_pass, base, rel, trade_vol, trade_price).json()
                                     print(colorize("Setprice order: "+str(trade_vol)[:8]+" "+base+" for "+str(trade_price*trade_vol)[:8]+" "+rel+" submitted...","cyan"))
                                     time.sleep(0.1)
